@@ -1,0 +1,14 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'agents-ui/main.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div id="agents-ui-root" data-csrf="{{ csrf_token }}"></div>
+    <script type="module" src="{% static 'agents-ui/main.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,302 @@
+#agents-ui-root {
+  --border: #d9dce1;
+  --bg: #0f1115;
+  --canvas-bg: #12141a;
+  --card-bg: #1b1e26;
+  --text: #e7e9ee;
+  --text-muted: #9aa0ab;
+  --accent: #5b8def;
+  --accent-hover: #7aa2f2;
+  --danger: #e5645f;
+  --danger-hover: #f08782;
+  --radius: 10px;
+}
+
+#agents-ui-root * { box-sizing: border-box; }
+
+#agents-ui-root {
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#agents-ui-root .page-status {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg);
+}
+#agents-ui-root .page-status.error { color: var(--danger); }
+
+#agents-ui-root .flow-page {
+  display: flex;
+  flex-direction: column;
+  height: min(78vh, 760px);
+  min-height: 520px;
+  background: var(--bg);
+}
+
+#agents-ui-root .flow-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card-bg);
+  flex-shrink: 0;
+}
+#agents-ui-root .flow-toolbar h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text);
+}
+#agents-ui-root .flow-toolbar p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+#agents-ui-root .flow-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#agents-ui-root .flow-canvas {
+  flex: 1;
+  position: relative;
+  background: var(--canvas-bg);
+  min-height: 0;
+}
+
+/* React Flow node */
+#agents-ui-root .flow-node {
+  position: relative;
+  width: 280px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+}
+#agents-ui-root .agent-node { border-top: 3px solid var(--accent); }
+#agents-ui-root .tool-node { border-top: 3px solid #4fb686; }
+
+#agents-ui-root .node-kind {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+#agents-ui-root .node-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#agents-ui-root .node-delete:hover { background: var(--danger); color: #fff; }
+
+#agents-ui-root .edge-actions {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: all;
+}
+#agents-ui-root .edge-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+#agents-ui-root .edge-delete {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--text-muted);
+}
+#agents-ui-root .edge-delete:hover { background: var(--danger); color: #fff; }
+
+#agents-ui-root .flow-handle {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border: 2px solid var(--card-bg);
+}
+
+#agents-ui-root .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#agents-ui-root .field.grow { flex: 1; }
+#agents-ui-root .field-row {
+  display: flex;
+  gap: 10px;
+}
+
+#agents-ui-root .field-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+#agents-ui-root .field-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+#agents-ui-root input[type="text"],
+#agents-ui-root input[type="url"],
+#agents-ui-root textarea,
+#agents-ui-root select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: #11131a;
+  width: 100%;
+}
+#agents-ui-root input:focus,
+#agents-ui-root textarea:focus,
+#agents-ui-root select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+#agents-ui-root textarea { resize: vertical; }
+
+#agents-ui-root .empty-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+#agents-ui-root .args-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#agents-ui-root .args-header,
+#agents-ui-root .args-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+#agents-ui-root .args-header {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+#agents-ui-root .args-row input[type="checkbox"] { justify-self: center; }
+
+#agents-ui-root .icon-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+#agents-ui-root .icon-btn:hover { background: #2a2e38; }
+#agents-ui-root .icon-btn.danger:hover { color: var(--danger); }
+
+#agents-ui-root .link-btn {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 0;
+}
+#agents-ui-root .link-btn:hover { text-decoration: underline; }
+
+#agents-ui-root .primary-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #fff;
+}
+#agents-ui-root .primary-btn:hover { background: var(--accent-hover); }
+#agents-ui-root .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+#agents-ui-root .primary-btn.small {
+  align-self: flex-start;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+}
+
+#agents-ui-root .form-error {
+  background: #3a1f1f;
+  color: var(--danger-hover);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+#agents-ui-root .flow-toolbar-actions select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+/* Compact agent node */
+#agents-ui-root .agent-node {
+  width: 220px;
+  padding: 10px 10px 8px;
+  gap: 6px;
+}
+#agents-ui-root .agent-node .field { gap: 2px; }
+#agents-ui-root .agent-node .field-label { font-size: 0.62rem; }
+#agents-ui-root .agent-node input[type="text"],
+#agents-ui-root .agent-node textarea {
+  padding: 3px 6px;
+  font-size: 0.75rem;
+}
+#agents-ui-root .agent-node .field-inline { font-size: 0.75rem; }
+#agents-ui-root .agent-node .primary-btn.small {
+  padding: 3px 10px;
+  font-size: 0.72rem;
+}
+
+#agents-ui-root .flow-toolbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+#agents-ui-root .flow-toolbar-actions select { width: auto; min-width: 150px; }
+#agents-ui-root .flow-toolbar-actions .primary-btn { white-space: nowrap; }

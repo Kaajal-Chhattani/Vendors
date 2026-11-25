@@ -1,0 +1,165 @@
+<button type="button" title="Temporal run status" aria-label="Temporal run status"
+        data-run-status-url="{{ url }}"
+        style="border:none; background:transparent; cursor:pointer; font-size:20px; line-height:1; padding:0 8px;"
+        onclick="window.ragRunStatus && window.ragRunStatus.open(this.dataset.runStatusUrl)">&#8942;</button>
+<script>
+if (!window.ragRunStatus) {
+  const COLORS = {done: '#16a34a', running: '#2563eb', retrying: '#d97706', failed: '#dc2626', pending: '#6b7280', not_run: '#9ca3af'};
+  const LABELS = {done: 'Done', running: 'Running', retrying: 'Retrying', failed: 'Failed', pending: 'Pending', not_run: 'Not run'};
+  let dialog, body, currentUrl;
+
+  function el(tag, text, style) {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = text;
+    if (style) node.style.cssText = style;
+    return node;
+  }
+
+  function badge(status) {
+    return el('span', LABELS[status] || status,
+      'background:' + (COLORS[status] || '#6b7280') + ';color:#fff;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:600;');
+  }
+
+  function detail(row) {
+    const parts = [];
+    if (row.attempt) parts.push('Attempt ' + row.attempt);
+    if (row.started) parts.push('Start ' + row.started);
+    if (row.ended) parts.push('End ' + row.ended);
+    if (row.duration !== null && row.duration !== undefined) parts.push(row.duration + 's');
+    if (row.next_retry) parts.push('Next retry ' + row.next_retry);
+    return parts.join(' · ');
+  }
+
+  function stepBlock(name, row, summary) {
+    const block = el('div', null, 'padding:10px 0;border-top:1px solid #e5e7eb;');
+    const head = el('div', null, 'display:flex;gap:8px;align-items:center;justify-content:space-between;');
+    head.appendChild(el('strong', name + (summary ? ' — ' + summary : '')));
+    head.appendChild(badge(row.status));
+    block.appendChild(head);
+    const text = detail(row);
+    if (text) block.appendChild(el('div', text, 'font-size:12px;color:#6b7280;margin-top:4px;'));
+    if (row.error) block.appendChild(el('div', 'Error: ' + row.error,
+      'font-size:12px;color:#dc2626;margin-top:4px;white-space:pre-wrap;word-break:break-word;'));
+    return block;
+  }
+
+  const STEP_LABELS = {claim_document: 'Claim document', prepare_chunks: 'Split into chunks',
+    embed_and_save_batch: 'Embed & save chunks', mark_status: 'Save final status', notify_document: 'Notify chat'};
+
+  function fmt(seconds) {
+    if (seconds === null || seconds === undefined) return '—';
+    if (seconds < 60) return seconds + 's';
+    return Math.floor(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's';
+  }
+
+  function cell(tag, content, style) {
+    const node = el(tag, null, 'padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;' + (style || ''));
+    if (content instanceof Node) node.appendChild(content); else node.textContent = content;
+    return node;
+  }
+
+  function table(headers, rows) {
+    const t = el('table', null, 'width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;');
+    const head = el('tr');
+    headers.forEach(function (h) { head.appendChild(cell('th', h, 'background:#f3f4f6;font-weight:600;')); });
+    t.appendChild(head);
+    rows.forEach(function (r) {
+      const tr = el('tr');
+      r.forEach(function (c) { tr.appendChild(cell('td', c)); });
+      t.appendChild(tr);
+    });
+    return t;
+  }
+
+  function csrf() {
+    const m = /(?:^|; )csrftoken=([^;]+)/.exec(document.cookie);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  async function act(url, button, note) {
+    button.disabled = true;
+    note.textContent = '';
+    try {
+      const response = await fetch(url, {method: 'POST', headers: {'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest'}});
+      const data = await response.json();
+      if (!response.ok) { note.textContent = data.message || 'Could not do that.'; button.disabled = false; return; }
+    } catch (e) { note.textContent = 'Could not reach the server.'; button.disabled = false; return; }
+    load(currentUrl);
+  }
+
+  function render(data) {
+    body.replaceChildren();
+    const doc = data.document;
+    const steps = (data.steps || []).filter(function (s) { return s.name !== 'notify_document'; });
+    if (doc) {
+      const current = steps.find(function (s) { return s.status === 'running' || s.status === 'retrying'; });
+      body.appendChild(table(['Document', 'Status', 'Processed via', 'Chunks made', 'Current step', 'Total time'], [[
+        '#' + doc.id, doc.status, doc.via, String(doc.chunks),
+        current ? (STEP_LABELS[current.name] || current.name) : '—',
+        data.total_seconds !== undefined ? fmt(data.total_seconds) : '—',
+      ]]));
+    }
+    if (data.message) body.appendChild(el('p', data.message));
+    if (steps.length) {
+      const rows = steps.map(function (step) {
+        const status = badge(step.status);
+        const batches = step.batches && step.batches.length ? step.batches.map(function (b) { return b.label; }).join(', ') : '';
+        return [STEP_LABELS[step.name] || step.name, status, step.summary || (step.attempt > 1 ? 'attempt ' + step.attempt : ''),
+                fmt(step.duration) + (step.error ? ' — ' + step.error : '')];
+      });
+      body.appendChild(table(['Step', 'Status', 'Detail', 'Time'], rows));
+      const info = el('div', null, 'font-size:12px;color:#6b7280;margin-bottom:8px;word-break:break-all;');
+      info.textContent = 'Workflow ' + data.workflow_id + ' · run ' + data.run_id + ' · ' + data.status + ' · started ' + data.started + (data.closed ? ' · closed ' + data.closed : '');
+      body.appendChild(info);
+    }
+    if (doc && (doc.can_stop || doc.can_start)) {
+      const bar = el('div', null, 'display:flex;align-items:center;gap:10px;');
+      const stop = !!doc.can_stop;
+      const button = el('button', stop ? 'Stop' : 'Start', 'cursor:pointer;border:none;border-radius:6px;padding:6px 18px;color:#fff;font-weight:600;background:' + (stop ? '#dc2626' : '#16a34a') + ';');
+      button.type = 'button';
+      const note = el('span', null, 'font-size:12px;color:#dc2626;');
+      button.addEventListener('click', function () { act(stop ? doc.stop_url : doc.start_url, button, note); });
+      bar.append(button, note);
+      body.appendChild(bar);
+    }
+  }
+
+  async function load(url) {
+    currentUrl = url;
+    body.replaceChildren(el('p', 'Loading...'));
+    try {
+      const response = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      render(await response.json());
+    } catch (e) {
+      render({message: 'Could not load the run status.'});
+    }
+  }
+
+  function build() {
+    dialog = document.createElement('dialog');
+    dialog.style.cssText = 'width:min(640px,92vw);max-height:80vh;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;';
+    const bar = el('div', null, 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;');
+    bar.appendChild(el('h3', 'Temporal run status', 'margin:0;font-size:16px;'));
+    const buttons = el('div', null, 'display:flex;gap:8px;');
+    const refresh = el('button', 'Refresh', 'cursor:pointer;padding:4px 10px;');
+    refresh.type = 'button';
+    refresh.addEventListener('click', function () { load(currentUrl); });
+    const close = el('button', 'Close', 'cursor:pointer;padding:4px 10px;');
+    close.type = 'button';
+    close.addEventListener('click', function () { dialog.close(); });
+    buttons.append(refresh, close);
+    bar.appendChild(buttons);
+    body = el('div');
+    dialog.append(bar, body);
+    document.body.appendChild(dialog);
+  }
+
+  window.ragRunStatus = {
+    open: function (url) {
+      if (!dialog) build();
+      dialog.showModal();
+      load(url);
+    },
+  };
+}
+</script>

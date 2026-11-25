@@ -1,0 +1,1457 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <style>
+        #chat-app { --accent: #2563eb; --card: #fff; --line: #d9dde3; --muted: #6b7280; background: #fff; color: #1f2937; color-scheme: light; display: flex; height: min(82vh, 780px); min-height: 480px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06); }
+        #chat-app button, #chat-app select { font-family: inherit; }
+        #sidebar { width: 260px; flex-shrink: 0; border-right: 1px solid var(--line); padding: 16px 12px; overflow-y: auto; background: #f8f9fb; }
+        #sidebar div.conversation-item:hover { background: #eceff3; }
+        #sidebar div.conversation-item.active { background: rgba(37, 99, 235, 0.10); box-shadow: inset 3px 0 0 var(--accent); }
+        #sidebar h3 { margin: 16px 8px 6px; font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+        #sidebar div.conversation-item { padding: 9px 12px; cursor: pointer; border-radius: 10px; margin-bottom: 2px; font-size: 0.9em; line-height: 1.35; color: #1f2937; transition: background 0.12s; }
+        #sidebar .chat-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+        #sidebar .agent-tag { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px; background: rgba(37, 99, 235, 0.08); color: #1d4ed8; font-size: 0.72em; font-weight: 600; }
+        #sidebar #chat-search { display: block; width: 100%; box-sizing: border-box; margin: 12px 0 2px; padding: 8px 12px 8px 34px; border: 1px solid var(--line); border-radius: 10px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center; color: #1f2937; font-size: 0.88em; outline: none; }
+        #sidebar #chat-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14); }
+        #sidebar #no-conversations, #sidebar #no-results { font-size: 0.85em; color: var(--muted); margin: 16px 8px; text-align: center; }
+        #sidebar [hidden] { display: none; }
+        #sidebar #new-chat-item { background: var(--accent); color: #fff; text-align: center; font-weight: 600; margin-bottom: 4px; padding: 11px 12px; }
+        #sidebar #new-chat-item:hover { background: #1d4ed8; }
+        #sidebar #new-chat-item.active { box-shadow: none; background: var(--accent); }
+        #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        #messages { flex: 1; padding: 28px max(20px, calc((100% - 760px) / 2)); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
+        #empty-state { margin: auto; text-align: center; max-width: 340px; color: var(--muted); }
+        #empty-state h3 { margin: 0 0 6px; font-size: 1.35em; color: #1f2937; }
+        #empty-state p { margin: 0; line-height: 1.5; }
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; word-wrap: break-word; }
+        .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; white-space: pre-wrap; }
+        .msg.bot { align-self: flex-start; background: #f1f3f6; color: #1f2937; border-bottom-left-radius: 5px; }
+
+        #composer-wrap { padding: 4px max(20px, calc((100% - 760px) / 2)) 14px; }
+        #composer { background: #fff; border: 1px solid #c8ced6; border-radius: 18px; padding: 12px 12px 8px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); transition: border-color 0.12s, box-shadow 0.12s; }
+        #composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14); }
+        #chat-app #message-input { display: block; width: 100%; box-sizing: border-box; border: none; outline: none; box-shadow: none; background: transparent; color: #1f2937; font-size: 15px; padding: 4px 0 12px; border-radius: 0; }
+        #composer-bar { display: flex; align-items: center; gap: 8px; }
+        #composer-bar .spacer { flex: 1; }
+        #chat-app #attach-btn { width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+        #chat-app #attach-btn:hover { background: #f1f3f6; color: #1f2937; }
+        .agent-pick { display: flex; align-items: center; gap: 8px; }
+        .agent-pick .agent-label { font-size: 0.78em; color: var(--muted); }
+        #chat-app #agent-select { appearance: none; -webkit-appearance: none; border: 1px solid var(--line); border-radius: 999px; background: #f3f4f6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color: #374151; font-size: 0.85em; font-weight: 600; padding: 6px 30px 6px 14px; cursor: pointer; max-width: 220px; }
+        #chat-app #agent-select:hover:not(:disabled) { background-color: #eceff3; }
+        #chat-app #agent-select:disabled { background-image: none; padding-right: 14px; cursor: default; opacity: 1; color: #4b5563; }
+        #chat-app #send-btn { width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer; transition: background 0.12s; }
+        #chat-app #send-btn:hover:not(:disabled) { background: #1d4ed8; }
+        #chat-app #send-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+        .run-card { align-self: flex-start; width: min(680px, 96%); padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; font-size: 0.88em; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06); }
+        .run-card .run-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-weight: 700; font-size: 1.05em; }
+        .run-card .run-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .run-card .run-badge { flex: none; padding: 2px 10px; border-radius: 9999px; color: #fff; font-size: 12px; font-weight: 600; }
+        .run-card .run-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        .run-card .run-table th, .run-card .run-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        .run-card .run-table th { background: #f3f4f6; font-weight: 600; }
+        .run-card .run-table td.err { color: #dc2626; word-break: break-word; }
+        .run-card .run-info { color: var(--muted); font-size: 0.82em; word-break: break-all; margin-bottom: 10px; }
+        .run-card .run-actions { display: flex; align-items: center; gap: 10px; }
+        .run-card .run-btn { border: none; border-radius: 6px; padding: 6px 18px; color: #fff; font-weight: 600; cursor: pointer; }
+        .run-card .run-btn:disabled { opacity: 0.55; cursor: wait; }
+        .run-card .run-btn.start { background: #16a34a; }
+        .run-card .run-btn.stop { background: #dc2626; }
+        .run-card .run-note { color: #dc2626; font-size: 0.85em; }
+        .run-card .run-wait { color: var(--muted); }
+        .msg.bot.has-docs { max-width: 100%; width: min(100%, 760px); }
+        .docs-card { margin-top: 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: #1f2937; overflow: hidden; }
+        .docs-card .dc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+        .docs-card .dc-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f3f4f6; border-radius: 999px; }
+        .docs-card .dc-tab { border: none; background: transparent; color: #4b5563; border-radius: 999px; padding: 6px 14px; font-size: 0.88em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .docs-card .dc-tab.active { background: var(--accent); color: #fff; }
+        .docs-card .dc-count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.08); font-size: 0.85em; text-align: center; }
+        .docs-card .dc-tab.active .dc-count { background: rgba(255, 255, 255, 0.28); }
+        .docs-card .dc-refresh { flex: none; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: #4b5563; cursor: pointer; font-size: 16px; line-height: 1; }
+        .docs-card .dc-refresh:hover { background: #f3f4f6; }
+        .msg.bot .docs-card table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .msg.bot .docs-card th { padding: 9px 14px; text-align: left; font-size: 0.75em; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fafafa; }
+        .msg.bot .docs-card td { padding: 11px 14px; border-bottom: 1px solid #f1f3f6; vertical-align: middle; white-space: normal; }
+        .msg.bot .docs-card tr:last-child td { border-bottom: none; }
+        .docs-card .dc-task { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .docs-card .dc-file { flex: none; width: 30px; height: 30px; border-radius: 8px; background: #eef2ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+        .docs-card .dc-name { font-weight: 600; word-break: break-word; }
+        .docs-card .dc-sub { color: var(--muted); font-size: 0.85em; margin-top: 1px; }
+        .docs-card .dc-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 0.85em; font-weight: 600; border: 1px solid; white-space: nowrap; }
+        .docs-card .dc-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .docs-card .dc-when { color: var(--muted); white-space: nowrap; }
+        .docs-card .dc-btn { border: none; border-radius: 8px; padding: 7px 16px; color: #fff; font-weight: 600; cursor: pointer; }
+        .docs-card .dc-btn:disabled { opacity: 0.55; cursor: wait; }
+        .docs-card .dc-btn.start { background: #16a34a; }
+        .docs-card .dc-btn.retry { background: var(--accent); }
+        .docs-card .dc-btn.stop { background: #dc2626; }
+        .docs-card .dc-err { margin-top: 4px; color: #dc2626; font-size: 0.8em; }
+        .msg.bot .docs-card .dc-more { margin-top: 3px; border: none; background: transparent; color: var(--accent); font-size: 0.85em; font-weight: 600; cursor: pointer; padding: 0; }
+        .msg.bot .docs-card tr.dc-detail td { background: #fafafa; padding: 10px 14px 12px; }
+        .msg.bot .docs-card tr.dc-detail .run-table { margin-bottom: 8px; }
+        .msg.bot .docs-card tr.dc-detail .run-table th, .msg.bot .docs-card tr.dc-detail .run-table td { padding: 5px 8px; font-size: 0.92em; white-space: normal; }
+        .docs-card .dc-tag { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; border: 1px solid #99e0d2; background: #e7f8f4; color: #0f766e; font-size: 0.78em; font-weight: 600; vertical-align: middle; }
+        .msg.bot .docs-card tr.dc-progress td { padding: 0 14px 14px; border-bottom: 1px solid #f1f3f6; }
+        .docs-card .dc-ptop { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+        .docs-card .dc-plabel { font-weight: 600; color: #1f2937; }
+        .docs-card .dc-segs { display: flex; gap: 5px; }
+        .docs-card .dc-seg { position: relative; flex: 1; height: 8px; border-radius: 999px; background: #e5e7eb; overflow: hidden; }
+        .docs-card .dc-seg.done { background: #16a34a; }
+        .docs-card .dc-seg.run { background: repeating-linear-gradient(-45deg, #cbd5e1 0 6px, #e5e7eb 6px 12px); background-size: 34px 34px; animation: dc-stripes 0.9s linear infinite; }
+        .docs-card .dc-seg.run > i { position: absolute; inset: 0 auto 0 0; background: #16a34a; border-radius: 999px; transition: width 0.4s ease; }
+        .docs-card .dc-seg.bad { background: #dc2626; }
+        @keyframes dc-stripes { to { background-position: 34px 0; } }
+        .docs-card .dc-empty { padding: 26px 14px; text-align: center; color: var(--muted); }
+        #attached-file { display: flex; margin-bottom: 10px; }
+        #attached-file .file-chip { min-width: 0; max-width: 100%; padding: 7px 8px 7px 10px; background: #f8f9fb; box-shadow: none; }
+        #attached-file .file-chip .badge { width: 32px; height: 32px; }
+        #attached-file .remove-file { margin-left: 8px; width: 24px; height: 24px; flex: none; cursor: pointer; border: none; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; }
+        #attached-file .remove-file:hover { background: #e5e7eb; color: #1f2937; }
+        .composer-hint { margin: 8px 0 0; text-align: center; font-size: 0.74em; color: var(--muted); }
+        @media (max-width: 700px) {
+            #messages, #composer-wrap { padding-left: 14px; padding-right: 14px; }
+            .agent-pick .agent-label, .composer-hint { display: none; }
+        }
+        .user-group { align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 82%; }
+        .user-group .msg.user { max-width: 100%; }
+        .file-chip { display: flex; align-items: center; gap: 12px; min-width: 250px; max-width: 100%; box-sizing: border-box; padding: 10px 14px; background: var(--card, #fff); color: #1f2937; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); white-space: normal; }
+        .file-chip .badge { flex: none; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; background: #16a34a; color: #fff; font-size: 0.68em; font-weight: 700; letter-spacing: 0.04em; border-radius: 9px; }
+        .file-chip .info { min-width: 0; }
+        .file-chip .name { font-weight: 600; font-size: 0.92em; word-break: break-word; }
+        .file-chip .kind { font-size: 0.78em; opacity: 0.6; margin-top: 1px; }
+        .msg.bot.has-chart { max-width: 100%; width: min(100%, 720px); }
+        .msg.bot p { margin: 0.4em 0; }
+        .msg.bot p:first-child, .msg.bot h1:first-child, .msg.bot h2:first-child, .msg.bot h3:first-child { margin-top: 0; }
+        .msg.bot ul, .msg.bot ol { margin: 0.4em 0; padding-left: 1.4em; }
+        .msg.bot h1, .msg.bot h2, .msg.bot h3, .msg.bot h4 { margin: 0.6em 0 0.3em; }
+        .msg.bot code { background: rgba(120, 120, 120, 0.18); padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+        .table-wrap { overflow-x: auto; margin: 0.6em 0; border: 1px solid var(--line); border-radius: 8px; }
+        .msg.bot table { border-collapse: collapse; width: 100%; font-size: 0.88em; }
+        .msg.bot th, .msg.bot td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        .msg.bot th { background: #e5e8ec; font-weight: 600; }
+        .msg.bot tr:last-child td { border-bottom: none; }
+        .chart-card { margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: #1f2937; }
+        .chart-title { font-size: 1.05em; font-weight: 700; margin: 0; }
+        .chart-desc { font-size: 0.8em; opacity: 0.65; margin: 2px 0 10px; }
+        .chart-svg-wrap { position: relative; }
+        .chart-svg-wrap svg { width: 100%; height: auto; display: block; }
+        .chart-svg-wrap text { font-family: inherit; fill: #4b5563; font-size: 11px; }
+        .chart-svg-wrap .axis-title { font-weight: 600; fill: #1f2937; font-size: 12px; }
+        .chart-svg-wrap .mark { transition: opacity 0.12s; }
+        .chart-svg-wrap .mark:hover { opacity: 0.75; }
+        .chart-tip { position: absolute; pointer-events: none; display: none; z-index: 5; background: #111827; color: #fff; padding: 6px 9px; border-radius: 6px; font-size: 12px; line-height: 1.4; white-space: nowrap; }
+        .chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 0.8em; }
+        .chart-source { opacity: 0.7; word-break: break-all; }
+        .chart-download { margin-left: auto; flex: none; border: 1px solid var(--line); background: #fff; color: #1f2937; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: inherit; }
+        .chart-download:hover { background: #f1f3f6; }
+        .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 0.82em; }
+        .chart-legend span.item { display: inline-flex; align-items: center; gap: 6px; }
+        .chart-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+        .typing { display: inline-flex; gap: 4px; align-items: center; }
+        .typing span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.4; animation: blink 1.2s infinite; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+        @media (max-width: 700px) {
+            #sidebar { display: none; }
+            .msg { max-width: 94%; }
+        }
+        #doc-notifications { margin-bottom: 8px; }
+        .doc-notif-banner {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #16a34a; color: #fff; padding: 8px 12px;
+            border-radius: 6px; margin-bottom: 6px; font-size: 0.9em;
+        }
+        .doc-notif-banner .doc-notif-close {
+            background: none; border: none; color: #fff; font-size: 16px;
+            line-height: 1; cursor: pointer; margin-left: 12px; padding: 0 4px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div id="doc-notifications"></div>
+    <div id="chat-app">
+        <div id="sidebar">
+            <div class="conversation-item" id="new-chat-item" data-session-id="">+ New chat</div>
+            <input type="search" id="chat-search" placeholder="Search chats" autocomplete="off" aria-label="Search chats">
+            <div id="chat-list">
+                {% for group in sidebar_groups %}
+                    <div class="chat-group" data-group="{{ group.key }}">
+                        <h3>{{ group.label }}</h3>
+                        {% for conversation in group.items %}
+                            <div class="conversation-item" data-session-id="{{ conversation.session_id }}" data-agent-type="{{ conversation.agent_type }}" title="{{ conversation.title }}">
+                                <span class="chat-title">{{ conversation.title }}</span>
+                                <span class="agent-tag">{{ conversation.agent_label }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+            <p id="no-conversations" {% if sidebar_groups %}hidden{% endif %}>No conversations yet.</p>
+            <p id="no-results" hidden>No chats match your search.</p>
+        </div>
+
+        <div id="main">
+            <div id="messages"></div>
+            <div id="composer-wrap">
+                <div id="composer">
+                    <div id="attached-file" style="display:none;"></div>
+                    <input type="text" id="message-input" placeholder="Message the assistant…" autocomplete="off">
+                    <div id="composer-bar">
+                        <input type="file" id="file-input" accept=".csv,.pdf" style="display:none;">
+                        <button id="attach-btn" type="button" title="Attach a CSV or PDF file" aria-label="Attach a CSV or PDF file">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                        </button>
+                        <span class="spacer"></span>
+                        <div class="agent-pick">
+                            <label class="agent-label" for="agent-select">Workflow</label>
+                            <select id="agent-select" title="Which workflow answers in this chat">
+                                {% for value, display in agent_choices %}
+                                    <option value="{{ value }}"{% if value == selected_agent %} selected{% endif %}>{{ display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button id="send-btn" type="button" title="Send" aria-label="Send">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <p class="composer-hint">Press Enter to send · attach a CSV or PDF to get tables and charts · type “save” to store a PDF as a document</p>
+            </div>
+        </div>
+    </div>
+
+    {% csrf_token %}
+    <script>
+        let sessionId = null;
+        let socket = null;
+        const messagesDiv = document.getElementById('messages');
+        const input = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const agentSelect = document.getElementById('agent-select');
+        const fileInput = document.getElementById('file-input');
+        const attachBtn = document.getElementById('attach-btn');
+        const attachedFileDiv = document.getElementById('attached-file');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        function showAttachedFile(name) {
+            attachedFileDiv.innerHTML = '';
+            const chip = buildFileChip(name);
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-file';
+            removeBtn.title = 'Remove file';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', clearAttachedFile);
+            chip.appendChild(removeBtn);
+            attachedFileDiv.appendChild(chip);
+            attachedFileDiv.style.display = 'flex';
+        }
+
+        function clearAttachedFile() {
+            fileInput.value = '';
+            attachedFileDiv.style.display = 'none';
+            attachedFileDiv.innerHTML = '';
+        }
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) showAttachedFile(fileInput.files[0].name);
+        });
+
+        function connectSocket(id) {
+            if (socket) socket.close();
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            socket = new WebSocket(`${protocol}://${window.location.host}/ws/chat/${id}/`);
+            socket.addEventListener('message', (event) => {
+                const data = JSON.parse(event.data);
+                if (data.sender === 'user') return; // already shown when sent
+                addMessage(data.content, data.sender);
+                if (data.agent_type) showResolvedAgent(sessionId, data.agent_type);
+            });
+            return new Promise((resolve) => socket.addEventListener('open', resolve, { once: true }));
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function inlineFormat(str) {
+            return str
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>');
+        }
+
+        function renderTable(rows) {
+            const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+            const head = cells(rows[0]);
+            let html = '<div class="table-wrap"><table><thead><tr>' +
+                head.map(c => `<th>${inlineFormat(c)}</th>`).join('') + '</tr></thead><tbody>';
+            for (const r of rows.slice(2)) {
+                html += '<tr>' + cells(r).map(c => `<td>${inlineFormat(c)}</td>`).join('') + '</tr>';
+            }
+            return html + '</tbody></table></div>';
+        }
+
+        function formatMessage(text) {
+            const lines = escapeHtml(text).split('\n');
+            let html = '';
+            let inList = false;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    const tableRows = [];
+                    while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) tableRows.push(lines[i++]);
+                    i--;
+                    html += renderTable(tableRows);
+                    continue;
+                }
+                const bulletMatch = line.match(/^\s*[-*]\s+(.*)/);
+                const numberedMatch = line.match(/^\s*\d+\.\s+(.*)/);
+                const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
+                if (bulletMatch || numberedMatch) {
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += `<li>${inlineFormat(bulletMatch ? bulletMatch[1] : numberedMatch[1])}</li>`;
+                    continue;
+                }
+                if (inList) { html += '</ul>'; inList = false; }
+                if (headingMatch) {
+                    const level = headingMatch[1].length;
+                    html += `<h${level}>${inlineFormat(headingMatch[2])}</h${level}>`;
+                } else if (line.trim() !== '') {
+                    html += `<p>${inlineFormat(line)}</p>`;
+                }
+            }
+            if (inList) html += '</ul>';
+            return html;
+        }
+
+        function extractChart(text) {
+            const match = text.match(/```chart\n([\s\S]*?)```/);
+            if (!match) return { text, chart: null };
+            try {
+                const chart = JSON.parse(match[1]);
+                const cleanText = text.slice(0, match.index) + text.slice(match.index + match[0].length);
+                return { text: cleanText, chart };
+            } catch (e) {
+                return { text, chart: null };
+            }
+        }
+
+        const PALETTE = ['#2563eb', '#f59e0b', '#16a34a', '#dc2626', '#8b5cf6', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#64748b'];
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const fmtNumber = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const shorten = (t, n) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+
+        function svgEl(tag, attrs, parent) {
+            const el = document.createElementNS(SVG_NS, tag);
+            for (const k in attrs) el.setAttribute(k, attrs[k]);
+            if (parent) parent.appendChild(el);
+            return el;
+        }
+
+        function niceScale(min, max, ticks = 5) {
+            if (max === min) max = min + 1;
+            const rawStep = (max - min) / ticks;
+            const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            const norm = rawStep / mag;
+            const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+            const lo = Math.floor(min / step) * step;
+            const hi = Math.ceil(max / step) * step;
+            const out = [];
+            for (let v = lo; v <= hi + step / 2; v += step) out.push(+v.toFixed(10));
+            return out;
+        }
+
+        function attachTooltip(mark, tip, wrap, html) {
+            mark.classList.add('mark');
+            const move = (e) => {
+                const r = wrap.getBoundingClientRect();
+                tip.style.left = Math.min(e.clientX - r.left + 12, r.width - 150) + 'px';
+                tip.style.top = (e.clientY - r.top - 36) + 'px';
+            };
+            mark.addEventListener('mouseenter', (e) => { tip.innerHTML = html; tip.style.display = 'block'; move(e); });
+            mark.addEventListener('mousemove', move);
+            mark.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+        }
+
+        const polar = (cx, cy, r, ang) => [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+
+        function drawCartesian(svg, chart, meta, tip, wrap, W, H) {
+            const labels = chart.data.labels;
+            const sets = chart.data.datasets;
+            const isLine = chart.type === 'line';
+            const m = { l: 70, r: 16, t: 14, b: labels.length > 6 ? 78 : 52 };
+            const all = sets.flatMap(d => d.data);
+            const ticks = niceScale(Math.min(0, ...all), Math.max(0, ...all));
+            const yMin = ticks[0], yMax = ticks[ticks.length - 1];
+            const iw = W - m.l - m.r, ih = H - m.t - m.b;
+            const y = (v) => m.t + ih - ((v - yMin) / (yMax - yMin)) * ih;
+            const band = iw / labels.length;
+
+            ticks.forEach(t => {
+                svgEl('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? '#9ca3af' : '#e5e7eb' }, svg);
+                svgEl('text', { x: m.l - 8, y: y(t) + 4, 'text-anchor': 'end' }, svg).textContent = fmtNumber(t);
+            });
+
+            const rotate = labels.length > 6;
+            const every = Math.ceil(labels.length / 24);
+            labels.forEach((lab, i) => {
+                if (i % every) return;
+                const x = m.l + band * i + band / 2;
+                const t = svgEl('text', { x, y: H - m.b + 16, 'text-anchor': rotate ? 'end' : 'middle',
+                    transform: rotate ? `rotate(-35 ${x} ${H - m.b + 16})` : '' }, svg);
+                t.textContent = shorten(String(lab), 14);
+            });
+
+            sets.forEach((ds, si) => {
+                const color = PALETTE[si % PALETTE.length];
+                const tipHtml = (i) => `<b>${labels[i]}</b><br>${ds.label}: ${fmtNumber(ds.data[i])}`;
+                if (isLine) {
+                    const pts = ds.data.map((v, i) => [m.l + band * i + band / 2, y(v)]);
+                    svgEl('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linejoin': 'round' }, svg);
+                    pts.forEach((p, i) => attachTooltip(svgEl('circle', { cx: p[0], cy: p[1], r: 4.5, fill: '#fff', stroke: color, 'stroke-width': 2.5 }, svg), tip, wrap, tipHtml(i)));
+                } else {
+                    const gap = band * 0.2;
+                    const bw = (band - gap) / sets.length;
+                    ds.data.forEach((v, i) => {
+                        const x = m.l + band * i + gap / 2 + bw * si;
+                        const top = Math.min(y(v), y(0));
+                        attachTooltip(svgEl('rect', { x, y: top, width: Math.max(bw - 1, 1), height: Math.abs(y(v) - y(0)), fill: color, rx: 2 }, svg), tip, wrap, tipHtml(i));
+                    });
+                }
+            });
+
+            if (meta.x_label) svgEl('text', { x: m.l + iw / 2, y: H - 6, 'text-anchor': 'middle', class: 'axis-title' }, svg).textContent = meta.x_label;
+            if (meta.y_label) svgEl('text', { x: 14, y: m.t + ih / 2, 'text-anchor': 'middle', class: 'axis-title', transform: `rotate(-90 14 ${m.t + ih / 2})` }, svg).textContent = meta.y_label;
+        }
+
+        function drawCircular(svg, chart, tip, wrap, W, H) {
+            const labels = chart.data.labels;
+            const vals = chart.data.datasets[0].data;
+            const total = vals.reduce((a, b) => a + Math.abs(b), 0) || 1;
+            const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 14;
+            const isPolar = chart.type === 'polarArea';
+            const hole = chart.type === 'doughnut' ? R * 0.55 : 0;
+            const max = Math.max(...vals.map(Math.abs), 1);
+            let start = -Math.PI / 2;
+            vals.forEach((v, i) => {
+                const frac = isPolar ? 1 / vals.length : Math.abs(v) / total;
+                const end = start + frac * 2 * Math.PI - (frac >= 1 ? 0.0001 : 0);
+                const r = isPolar ? R * Math.sqrt(Math.abs(v) / max) : R;
+                const [x1, y1] = polar(cx, cy, r, start), [x2, y2] = polar(cx, cy, r, end);
+                const [x3, y3] = polar(cx, cy, hole, end), [x4, y4] = polar(cx, cy, hole, start);
+                const large = end - start > Math.PI ? 1 : 0;
+                const d = hole
+                    ? `M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${hole},${hole} 0 ${large} 0 ${x4},${y4}Z`
+                    : `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2}Z`;
+                const path = svgEl('path', { d, fill: PALETTE[i % PALETTE.length], stroke: '#fff', 'stroke-width': 1.5 }, svg);
+                attachTooltip(path, tip, wrap, `<b>${labels[i]}</b><br>${fmtNumber(v)} (${(Math.abs(v) / total * 100).toFixed(1)}%)`);
+                start = end;
+            });
+        }
+
+        function drawRadar(svg, chart, tip, wrap, W, H) {
+            const labels = chart.data.labels, sets = chart.data.datasets;
+            const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 40;
+            const max = Math.max(...sets.flatMap(d => d.data), 1);
+            const n = labels.length;
+            const ang = (i) => -Math.PI / 2 + (i / n) * 2 * Math.PI;
+            [0.25, 0.5, 0.75, 1].forEach(f => {
+                svgEl('polygon', { points: labels.map((_, i) => polar(cx, cy, R * f, ang(i)).join(',')).join(' '), fill: 'none', stroke: '#e5e7eb' }, svg);
+            });
+            labels.forEach((lab, i) => {
+                const [x, y] = polar(cx, cy, R, ang(i)), [tx, ty] = polar(cx, cy, R + 14, ang(i));
+                svgEl('line', { x1: cx, y1: cy, x2: x, y2: y, stroke: '#e5e7eb' }, svg);
+                svgEl('text', { x: tx, y: ty + 4, 'text-anchor': Math.abs(tx - cx) < 8 ? 'middle' : tx > cx ? 'start' : 'end' }, svg).textContent = shorten(String(lab), 14);
+            });
+            sets.forEach((ds, si) => {
+                const color = PALETTE[si % PALETTE.length];
+                const pts = ds.data.map((v, i) => polar(cx, cy, R * (v / max), ang(i)));
+                svgEl('polygon', { points: pts.map(p => p.join(',')).join(' '), fill: color + '33', stroke: color, 'stroke-width': 2 }, svg);
+                pts.forEach((p, i) => attachTooltip(svgEl('circle', { cx: p[0], cy: p[1], r: 4, fill: color }, svg), tip, wrap, `<b>${labels[i]}</b><br>${ds.label}: ${fmtNumber(ds.data[i])}`));
+            });
+        }
+
+        function buildChartCard(chart) {
+            const meta = chart.meta || {};
+            const type = chart.type;
+            const circular = ['pie', 'doughnut', 'polarArea'].includes(type);
+            const W = 720, H = circular || type === 'radar' ? 340 : 340;
+
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            if (meta.title) {
+                const h = document.createElement('h4');
+                h.className = 'chart-title';
+                h.textContent = meta.title;
+                card.appendChild(h);
+            }
+            if (meta.description) {
+                const d = document.createElement('div');
+                d.className = 'chart-desc';
+                d.textContent = meta.description;
+                card.appendChild(d);
+            }
+            const wrap = document.createElement('div');
+            wrap.className = 'chart-svg-wrap';
+            const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': meta.title || 'Chart' });
+            const tip = document.createElement('div');
+            tip.className = 'chart-tip';
+            wrap.appendChild(svg);
+            wrap.appendChild(tip);
+            card.appendChild(wrap);
+
+            if (circular) drawCircular(svg, chart, tip, wrap, W, H);
+            else if (type === 'radar') drawRadar(svg, chart, tip, wrap, W, H);
+            else drawCartesian(svg, chart, meta, tip, wrap, W, H);
+
+            const legend = document.createElement('div');
+            legend.className = 'chart-legend';
+            const items = circular
+                ? chart.data.labels.map((l, i) => [String(l), PALETTE[i % PALETTE.length]])
+                : chart.data.datasets.length > 1
+                    ? chart.data.datasets.map((d, i) => [d.label, PALETTE[i % PALETTE.length]])
+                    : [];
+            items.forEach(([name, color]) => {
+                const item = document.createElement('span');
+                item.className = 'item';
+                const sw = document.createElement('i');
+                sw.style.background = color;
+                item.appendChild(sw);
+                item.appendChild(document.createTextNode(name));
+                legend.appendChild(item);
+            });
+            if (items.length) card.appendChild(legend);
+
+            const footer = document.createElement('div');
+            footer.className = 'chart-footer';
+            const source = document.createElement('span');
+            source.className = 'chart-source';
+            if (meta.source) source.textContent = `Source: ${meta.source}`;
+            const download = document.createElement('button');
+            download.type = 'button';
+            download.className = 'chart-download';
+            download.textContent = 'Download PNG';
+            download.addEventListener('click', () => downloadChartPng(svg, meta, items, W, H));
+            footer.appendChild(source);
+            footer.appendChild(download);
+            card.appendChild(footer);
+            return card;
+        }
+
+        // Saves the chart as a PNG with its title, legend and source file name included.
+        function downloadChartPng(svg, meta, legendItems, W, H) {
+            // The chart's text styling comes from the page's CSS, which a standalone SVG
+            // image doesn't have, so copy the computed styles onto a clone first.
+            const clone = svg.cloneNode(true);
+            const props = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline'];
+            const from = svg.querySelectorAll('*'), to = clone.querySelectorAll('*');
+            from.forEach((el, i) => {
+                const cs = getComputedStyle(el);
+                props.forEach(p => to[i].style.setProperty(p, cs.getPropertyValue(p)));
+            });
+            clone.setAttribute('xmlns', SVG_NS);
+            clone.setAttribute('width', W);
+            clone.setAttribute('height', H);
+            const blobUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' }));
+
+            const img = new Image();
+            img.onload = () => {
+                const scale = 2, pad = 24, font = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+                const probe = document.createElement('canvas').getContext('2d');
+                probe.font = `13px ${font}`;
+                const maxW = W - pad * 2;
+                const placed = [];
+                let x = 0, row = 0;
+                legendItems.forEach(([name, color]) => {
+                    const w = 16 + probe.measureText(name).width + 18;
+                    if (x + w > maxW && x > 0) { row++; x = 0; }
+                    placed.push({ name, color, x, row });
+                    x += w;
+                });
+                const legendH = legendItems.length ? (row + 1) * 22 + 8 : 0;
+                const headerH = pad + 26 + (meta.description ? 20 : 0) + 8;
+                const footerH = meta.source ? 34 : pad;
+                const totalH = headerH + H + legendH + footerH;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = W * scale;
+                canvas.height = totalH * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.scale(scale, scale);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, W, totalH);
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillStyle = '#1f2937';
+                ctx.font = `700 18px ${font}`;
+                ctx.fillText(meta.title || 'Chart', pad, pad + 16);
+                if (meta.description) {
+                    ctx.fillStyle = '#6b7280';
+                    ctx.font = `13px ${font}`;
+                    ctx.fillText(meta.description, pad, pad + 38);
+                }
+                ctx.drawImage(img, 0, headerH, W, H);
+                ctx.font = `13px ${font}`;
+                placed.forEach(p => {
+                    const y = headerH + H + 8 + p.row * 22;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(pad + p.x, y, 10, 10);
+                    ctx.fillStyle = '#374151';
+                    ctx.fillText(p.name, pad + p.x + 16, y + 10);
+                });
+                if (meta.source) {
+                    ctx.fillStyle = '#6b7280';
+                    ctx.font = `12px ${font}`;
+                    ctx.fillText(`Source: ${meta.source}`, pad, totalH - 12);
+                }
+                URL.revokeObjectURL(blobUrl);
+                canvas.toBlob(blob => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = (meta.title || 'chart').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toLowerCase() + '.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+                }, 'image/png');
+            };
+            img.onerror = () => { URL.revokeObjectURL(blobUrl); alert('Could not export this chart.'); };
+            img.src = blobUrl;
+        }
+
+        function buildFileChip(fileName, fileUrl) {
+            // With a file link (saved messages) the chip opens the file in a new tab.
+            const chip = document.createElement(fileUrl ? 'a' : 'div');
+            chip.className = 'file-chip';
+            if (fileUrl) {
+                chip.href = fileUrl;
+                chip.target = '_blank';
+                chip.rel = 'noopener';
+                chip.style.textDecoration = 'none';
+            }
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            const extension = fileName.includes('.') ? fileName.split('.').pop().toUpperCase() : 'FILE';
+            badge.textContent = extension;
+            const info = document.createElement('div');
+            info.className = 'info';
+            const name = document.createElement('div');
+            name.className = 'name';
+            name.textContent = fileName;
+            const kind = document.createElement('div');
+            kind.className = 'kind';
+            kind.textContent = extension === 'CSV' ? 'CSV · Spreadsheet' : extension + ' · Document';
+            info.appendChild(name);
+            info.appendChild(kind);
+            chip.appendChild(badge);
+            chip.appendChild(info);
+            return chip;
+        }
+
+        // ---- Documents card: a ```documents block in a bot answer becomes a live tabbed table with Start / Stop ----
+        function extractDocuments(text) {
+            const match = text.match(/```documents\n([\s\S]*?)```/);
+            if (!match) return { text, docs: null };
+            try {
+                const docs = JSON.parse(match[1]);
+                return { text: text.slice(0, match.index) + text.slice(match.index + match[0].length), docs };
+            } catch (e) {
+                return { text, docs: null };
+            }
+        }
+
+        const DOC_TABS = [
+            ['running', 'Running', d => d.status === 'started', '#2563eb'],
+            ['failed', 'Failed', d => d.status === 'error', '#dc2626'],
+            ['todo', 'To do', d => d.status === 'pending', '#6b7280'],
+            ['done', 'Done', d => d.status === 'processed', '#16a34a'],
+        ];
+
+        function docTimeAgo(iso) {
+            const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
+            if (!iso || isNaN(seconds)) return '—';
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+            const days = Math.floor(seconds / 86400);
+            return `${days} day${days === 1 ? '' : 's'} ago`;
+        }
+
+        function buildDocsCard(spec) {
+            const card = document.createElement('div');
+            card.className = 'docs-card';
+            const top = document.createElement('div');
+            top.className = 'dc-top';
+            const tabsEl = document.createElement('div');
+            tabsEl.className = 'dc-tabs';
+            const refresh = document.createElement('button');
+            refresh.type = 'button';
+            refresh.className = 'dc-refresh';
+            refresh.title = 'Refresh';
+            refresh.textContent = '↻';
+            top.append(tabsEl, refresh);
+            const bodyEl = document.createElement('div');
+            card.append(top, bodyEl);
+
+            let rows = [];
+            let tab = spec.tab || null;
+            let timer = null;
+            const errors = {};
+            const open = new Set();      // document ids whose Details are expanded
+            const details = {};          // doc id -> last fetched run-status JSON
+            const born = Date.now();
+            const listUrl = `{% url 'chat:document-list' %}?ids=${(spec.ids || []).join(',')}`;
+            const summarized = new Set();  // trial runs whose summary was already asked for
+            const runUrl = (id, kind) => PROCESS_RUN_URL.replace('run-status', kind).replace('WORKFLOW', id);
+
+            // A trial 'process' run (nothing saved) shown as one more row of the same table.
+            function runRow(run, data) {
+                const info = data.run;
+                const status = { Running: 'started', Completed: 'processed', Canceled: 'pending', Terminated: 'pending' }[info.status] || 'error';
+                return {
+                    id: run.id, isRun: true, name: run.name, via: 'Temporal · not saved', chunks: info.chunk_count || 0, status,
+                    finished: info.closed ? info.closed.replace(' ', 'T') + 'Z' : '',
+                    can_stop: status === 'started', can_start: status !== 'started' && status !== 'processed',
+                };
+            }
+
+            async function loadRuns() {
+                const rowsOrNull = await Promise.all((spec.runs || []).map(async run => {
+                    try {
+                        const response = await fetch(runUrl(run.id, 'run-status'));
+                        if (!response.ok) return null;
+                        const data = await response.json();
+                        if (!data.run) return null;
+                        details[run.id] = data;
+                        return runRow(run, data);
+                    } catch (e) { return null; }
+                }));
+                return rowsOrNull.filter(Boolean);
+            }
+
+            async function postSummary(row) {
+                if (summarized.has(row.id)) return;
+                summarized.add(row.id);
+                try {
+                    const response = await fetch(runUrl(row.id, 'summary'), { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                    const result = await response.json();
+                    if (response.ok && !result.existing) addMessage(result.content, 'bot');
+                } catch (e) { /* the row already shows the outcome */ }
+            }
+
+            function actionButton(doc) {
+                if (!doc.can_stop && !doc.can_start) return '—';
+                const kind = doc.can_stop ? 'stop' : (doc.status === 'error' ? 'retry' : 'start');
+                const label = doc.isRun && kind === 'start' ? 'Restart' : { stop: 'Stop', retry: 'Retry', start: 'Start' }[kind];
+                const button = runEl('button', label, 'dc-btn ' + kind);
+                button.type = 'button';
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    const url = doc.isRun
+                        ? runUrl(doc.id, doc.can_stop ? 'stop' : 'restart')
+                        : (doc.can_stop ? STOP_URL : START_URL).replace('/0/', `/${doc.id}/`);
+                    try {
+                        const response = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                        const data = await response.json();
+                        errors[doc.id] = response.ok ? '' : (data.message || 'Could not do that.');
+                        if (response.ok && doc.isRun && data.content) addMessage(data.content, 'bot');  // a restart gets its own new card
+                    } catch (e) { errors[doc.id] = 'Could not reach the server.'; }
+                    load();
+                });
+                const wrap = document.createElement('div');
+                wrap.appendChild(button);
+                if (errors[doc.id]) wrap.appendChild(runEl('div', errors[doc.id], 'dc-err'));
+                return wrap;
+            }
+
+            const isRunning = d => d.status === 'started'
+                || (d.status === 'pending' && d.via === 'Temporal' && Date.now() - born < 60000);
+
+            async function loadDetail(id) {
+                try {
+                    const response = await fetch(typeof id === 'string' ? runUrl(id, 'run-status') : RUN_STATUS_URL.replace('/0/', `/${id}/`));
+                    details[id] = await response.json();
+                } catch (e) { details[id] = { message: 'Could not load the run details.' }; }
+            }
+
+            function progressRow(doc) {
+                const tr = document.createElement('tr');
+                tr.className = 'dc-progress';
+                const td = document.createElement('td');
+                td.colSpan = 4;
+                const data = details[doc.id];
+                const run = data && data.run;
+                const steps = run ? run.steps.filter(s => s.name !== 'notify_document') : [];
+                const batches = step => /(\d+)\/(\d+) batches/.exec((step && step.summary) || '');
+                const top = runEl('div', null, 'dc-ptop');
+                let label = 'Waiting for the worker to pick it up…';
+                if (steps.length) {
+                    const current = steps.find(s => s.status === 'running' || s.status === 'retrying')
+                        || steps.find(s => s.status === 'pending' || s.status === 'not_run');
+                    const m = batches(current);
+                    const name = !current ? 'Finishing'
+                        : (/embed/.test(current.name) && m ? `Embed batches ${m[1]}/${m[2]}` : (STEP_LABELS[current.name] || current.name));
+                    label = `${name} · ${steps.filter(s => s.status === 'done').length}/${steps.length} steps`
+                        + (run.total_seconds != null ? ` · ${fmtSeconds(run.total_seconds)}` : '');
+                }
+                top.appendChild(runEl('span', label, 'dc-plabel'));
+                if (doc.can_stop) top.appendChild(actionButton(doc));
+                const segs = runEl('div', null, 'dc-segs');
+                (steps.length ? steps : [{ status: 'pending' }]).forEach(step => {
+                    const seg = runEl('div', null, 'dc-seg' + (step.status === 'done' ? ' done'
+                        : (step.status === 'failed' ? ' bad' : (step.status === 'running' || step.status === 'retrying' ? ' run' : ''))));
+                    if (seg.classList.contains('run')) {
+                        const m = batches(step);
+                        const fill = document.createElement('i');
+                        fill.style.width = `${m && Number(m[2]) ? Math.round(100 * m[1] / m[2]) : 0}%`;
+                        seg.appendChild(fill);
+                    }
+                    segs.appendChild(seg);
+                });
+                td.append(top, segs);
+                tr.appendChild(td);
+                return tr;
+            }
+
+            function detailRow(doc) {
+                const tr = document.createElement('tr');
+                tr.className = 'dc-detail';
+                const td = document.createElement('td');
+                td.colSpan = 4;
+                const data = details[doc.id];
+                const run = data && data.run;
+                if (!data) {
+                    td.textContent = 'Loading…';
+                } else if (!run) {
+                    td.textContent = doc.via === 'Temporal (text only)'
+                        ? 'Text was extracted with Temporal. It has not been chunked or embedded yet: press Start to do that.'
+                        : (data.error || data.message || 'No Temporal run for this document yet.');
+                } else {
+                    const steps = run.steps.filter(s => s.name !== 'notify_document');
+                    td.appendChild(runTable(['Chunks made', 'Steps done', 'Total time', 'Run status'],
+                        [[String(run.chunk_count ?? data.chunks), `${steps.filter(s => s.status === 'done').length}/${steps.length}`,
+                          fmtSeconds(run.total_seconds), run.status]]));
+                    td.appendChild(runTable(['Step', 'Status', 'Detail', 'Time'], steps.map(step => [
+                        STEP_LABELS[step.name] || step.name,
+                        statusPill(step.status.replace('_', ' '), RUN_COLORS[step.status] || '#6b7280'),
+                        step.summary || (step.attempt > 1 ? `attempt ${step.attempt}` : ''),
+                        { text: fmtSeconds(step.duration) + (step.error ? ` — ${step.error}` : ''), err: !!step.error },
+                    ])));
+                    td.appendChild(runEl('div', `Workflow ${run.workflow_id}`, 'run-info'));
+                }
+                tr.appendChild(td);
+                return tr;
+            }
+
+            function render() {
+                if (!tab) tab = (DOC_TABS.find(t => rows.some(t[2])) || DOC_TABS[0])[0];
+                tabsEl.replaceChildren();
+                DOC_TABS.forEach(([key, label, test]) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'dc-tab' + (key === tab ? ' active' : '');
+                    button.append(label, runEl('span', String(rows.filter(test).length), 'dc-count'));
+                    button.addEventListener('click', () => { tab = key; render(); });
+                    tabsEl.appendChild(button);
+                });
+                const [, , test, color] = DOC_TABS.find(t => t[0] === tab);
+                const shown = rows.filter(test);
+                bodyEl.replaceChildren();
+                if (!shown.length) { bodyEl.appendChild(runEl('div', 'No documents here.', 'dc-empty')); return; }
+                const table = document.createElement('table');
+                const head = document.createElement('tr');
+                ['Task', 'Status', 'Finished', 'Action'].forEach(h => head.appendChild(runEl('th', h)));
+                table.appendChild(head);
+                shown.forEach(doc => {
+                    const tr = document.createElement('tr');
+                    const task = runEl('div', null, 'dc-task');
+                    const info = document.createElement('div');
+                    const more = runEl('button', open.has(doc.id) ? 'Hide details' : 'Details', 'dc-more');
+                    more.type = 'button';
+                    more.addEventListener('click', () => {
+                        if (open.has(doc.id)) open.delete(doc.id); else open.add(doc.id);
+                        loadDetail(doc.id).then(render);
+                        render();
+                    });
+                    const nameLine = runEl('div', doc.name, 'dc-name');
+                    if (doc.via && doc.via !== '-') nameLine.appendChild(runEl('span', doc.via, 'dc-tag'));
+                    info.append(nameLine,
+                        runEl('div', [doc.isRun ? `Workflow ${doc.id.slice(0, 20)}…` : `#${doc.id}`, doc.via, `${doc.chunks} chunks`].join(' · '), 'dc-sub'), more);
+                    task.append(runEl('span', 'PDF', 'dc-file'), info);
+                    const pill = runEl('span', DOC_TABS.find(t => t[2](doc))[1], 'dc-pill');
+                    pill.style.color = color;
+                    pill.style.borderColor = color + '55';
+                    pill.style.background = color + '14';
+                    [task, pill, runEl('span', docTimeAgo(doc.finished), 'dc-when'), (isRunning(doc) && doc.can_stop) ? '' : actionButton(doc)].forEach(cell => {
+                        const td = document.createElement('td');
+                        if (cell instanceof Node) td.appendChild(cell); else td.textContent = cell;
+                        tr.appendChild(td);
+                    });
+                    table.appendChild(tr);
+                    if (isRunning(doc)) table.appendChild(progressRow(doc));
+                    if (open.has(doc.id)) table.appendChild(detailRow(doc));
+                });
+                bodyEl.appendChild(table);
+            }
+
+            async function load() {
+                clearTimeout(timer);
+                try {
+                    const response = await fetch(listUrl);
+                    if (response.ok) {
+                        const docs = (await response.json()).documents;
+                        const runs = await loadRuns();
+                        rows = [...docs, ...runs].sort((a, b) => (a.isRun ? 1 : 0) - (b.isRun ? 1 : 0));
+                        const wanted = new Set([...open, ...docs.filter(isRunning).map(d => d.id)].filter(id => typeof id !== 'string'));
+                        await Promise.all([...wanted].map(loadDetail));
+                        render();
+                        runs.filter(r => r.status === 'processed').forEach(postSummary);
+                    }
+                } catch (e) { /* keep what is shown */ }
+                if (document.body.contains(card) && rows.some(isRunning)) timer = setTimeout(load, 2000);
+            }
+
+            refresh.addEventListener('click', load);
+            bodyEl.appendChild(runEl('div', 'Loading…', 'dc-empty'));
+            load();
+            return card;
+        }
+
+        function addMessage(text, sender, fileName, fileUrl) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + sender;
+            document.getElementById('empty-state')?.remove();
+            if (sender === 'bot') {
+                hideTyping();
+                const { text: chartless, chart } = extractChart(text);
+                const { text: docsless, docs } = extractDocuments(chartless);
+                const { text: cleanText, run: processRun } = extractProcessRun(docsless);
+                div.innerHTML = formatMessage(cleanText);
+                if (processRun) {
+                    div.classList.add('has-docs');
+                    div.appendChild(buildProcessCard(processRun));
+                }
+                if (docs) {
+                    div.classList.add('has-docs');
+                    div.appendChild(buildDocsCard(docs));
+                }
+                if (chart) {
+                    div.classList.add('has-chart');
+                    div.appendChild(buildChartCard(chart));
+                }
+            } else {
+                div.textContent = text;
+            }
+            if (sender !== 'bot' && fileName) {
+                // The attached file is its own card, with the typed text in a separate bubble under it.
+                const group = document.createElement('div');
+                group.className = 'user-group';
+                group.appendChild(buildFileChip(fileName, fileUrl));
+                if (text) group.appendChild(div);
+                messagesDiv.appendChild(group);
+            } else if (sender === 'bot' || text) {
+                messagesDiv.appendChild(div);
+            }
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function showTyping() {
+            if (document.getElementById('typing-indicator')) return;
+            const div = document.createElement('div');
+            div.id = 'typing-indicator';
+            div.className = 'msg bot';
+            div.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function hideTyping() {
+            document.getElementById('typing-indicator')?.remove();
+        }
+
+        function showEmptyState() {
+            messagesDiv.innerHTML = '<div id="empty-state"><h3>How can I help?</h3><p>Ask a question, or attach a CSV or PDF to get tables and charts.</p></div>';
+        }
+
+        const UNTITLED = 'New chat…';
+
+        function sidebarItem(id) {
+            return document.querySelector(`#sidebar .conversation-item[data-session-id="${id}"]`);
+        }
+
+        // New chats go at the top of the "Today" group, which is created if the list has none yet.
+        function todayGroup() {
+            let group = document.querySelector('#chat-list .chat-group[data-group="today"]');
+            if (!group) {
+                group = document.createElement('div');
+                group.className = 'chat-group';
+                group.dataset.group = 'today';
+                const h = document.createElement('h3');
+                h.textContent = 'Today';
+                group.appendChild(h);
+                document.getElementById('chat-list').prepend(group);
+            }
+            return group;
+        }
+
+        document.getElementById('chat-search').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            let shown = 0;
+            document.querySelectorAll('#chat-list .chat-group').forEach(group => {
+                let groupShown = 0;
+                group.querySelectorAll('.conversation-item').forEach(item => {
+                    const match = !q || item.textContent.toLowerCase().includes(q);
+                    item.hidden = !match;
+                    if (match) groupShown++;
+                });
+                group.hidden = groupShown === 0;
+                shown += groupShown;
+            });
+            document.getElementById('no-results').hidden = !q || shown > 0;
+        });
+
+        function upsertSidebarItem(id, title, agentType) {
+            let item = sidebarItem(id);
+            if (!item) {
+                item = document.createElement('div');
+                item.className = 'conversation-item';
+                item.dataset.sessionId = id;
+                item.dataset.agentType = agentType;
+                const titleEl = document.createElement('span');
+                titleEl.className = 'chat-title';
+                item.appendChild(titleEl);
+                const tag = document.createElement('span');
+                tag.className = 'agent-tag';
+                tag.textContent = agentSelect.options[agentSelect.selectedIndex]?.text || '';
+                item.appendChild(tag);
+                item.addEventListener('click', () => loadConversation(id, item.dataset.agentType));
+                todayGroup().querySelector('h3').insertAdjacentElement('afterend', item);
+                document.getElementById('no-conversations').hidden = true;
+            }
+            item.querySelector('.chat-title').textContent = title;
+            item.title = title;
+            setActive(id);
+        }
+
+        // Keeps the dropdown and sidebar tag in sync with the conversation's workflow.
+        function showResolvedAgent(id, agentType) {
+            const option = [...agentSelect.options].find(o => o.value === agentType);
+            if (!option) return;
+            if (String(id) === String(sessionId)) agentSelect.value = agentType;
+            const item = sidebarItem(id);
+            if (!item) return;
+            item.dataset.agentType = agentType;
+            item.querySelector('.agent-tag').textContent = option.text;
+        }
+
+        function nameIfUntitled(text) {
+            const item = sidebarItem(sessionId);
+            if (item && item.querySelector('.chat-title').textContent.trim() === UNTITLED) {
+                upsertSidebarItem(sessionId, text.slice(0, 50), item.dataset.agentType);
+            }
+        }
+
+        async function ensureSession() {
+            if (sessionId) return;
+            const response = await fetch(`/chat/new/${encodeURIComponent(agentSelect.value)}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ agent_type: agentSelect.value }),
+            });
+            const data = await response.json();
+            sessionId = data.session_id;
+            agentSelect.value = data.agent_type;
+            agentSelect.disabled = true;
+            upsertSidebarItem(sessionId, UNTITLED, data.agent_type);
+            await connectSocket(sessionId);
+        }
+
+        async function sendWithFile(text, file) {
+            await ensureSession();
+            nameIfUntitled(text || file.name);
+            addMessage(text, 'user', file.name);
+            showTyping();
+            const formData = new FormData();
+            formData.append('message', text);
+            formData.append('session_id', sessionId);
+            formData.append('file', file);
+            const response = await fetch("{% url 'chat:send-message' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: formData,
+            });
+            const data = await response.json();
+            hideTyping();
+            if (data.file_url) {
+                // The chip shown while sending becomes a link to the saved file.
+                const chips = messagesDiv.querySelectorAll('.user-group .file-chip');
+                const last = chips[chips.length - 1];
+                if (last) last.replaceWith(buildFileChip(file.name, data.file_url));
+            }
+            if (data.title) upsertSidebarItem(sessionId, data.title, data.agent_type);
+            showResolvedAgent(sessionId, data.agent_type);
+            addMessage(data.reply, 'bot');
+        }
+
+        attachBtn.addEventListener('click', () => fileInput.click());
+
+        // ---- Saving a PDF ("save" in chat) -> Document (Temporal) with a live run card ----
+        const RUN_COLORS = {done: '#16a34a', running: '#2563eb', retrying: '#d97706', failed: '#dc2626', pending: '#6b7280', not_run: '#9ca3af'};
+        const RUN_POLL_MS = 2000;
+        const RUN_STATUS_URL = "{% url 'chat:document-run-status' 0 %}";
+
+        function runEl(tag, text, className) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined && text !== null) node.textContent = text;
+            return node;
+        }
+
+        const STEP_LABELS = {
+            claim_document: 'Claim document', prepare_chunks: 'Split into chunks',
+            embed_and_save_batch: 'Embed & save chunks', mark_status: 'Save final status', extract_pdf_text: 'Extract text',
+            split_text_preview: 'Split into chunks', preview_embed_batch: 'Embed chunks (not saved)',
+        };
+        const START_URL = "{% url 'chat:document-start' 0 %}";
+        const STOP_URL = "{% url 'chat:document-stop' 0 %}";
+
+        function fmtSeconds(value) {
+            if (value === null || value === undefined) return '—';
+            return value < 60 ? `${value}s` : `${Math.floor(value / 60)}m ${Math.round(value % 60)}s`;
+        }
+
+        function runTable(headers, rows) {
+            const table = runEl('table', null, 'run-table');
+            const head = document.createElement('tr');
+            headers.forEach(h => head.appendChild(runEl('th', h)));
+            table.appendChild(head);
+            rows.forEach(cells => {
+                const tr = document.createElement('tr');
+                cells.forEach(cell => {
+                    const td = runEl('td');
+                    if (cell instanceof Node) td.appendChild(cell);
+                    else if (cell && typeof cell === 'object') { td.textContent = cell.text; if (cell.err) td.className = 'err'; }
+                    else td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+            return table;
+        }
+
+        function statusPill(label, color) {
+            const pill = runEl('span', label, 'run-badge');
+            pill.style.background = color;
+            return pill;
+        }
+
+        // Shared by the documents card and the 'process' card: the "Embed batches 3/15 · 3/4 steps" line + segmented bar.
+        function buildProgress(run, stopButton) {
+            const steps = run ? run.steps.filter(s => s.name !== 'notify_document') : [];
+            const batches = step => /(\d+)\/(\d+) batches/.exec((step && step.summary) || '');
+            const wrap = document.createElement('div');
+            const top = runEl('div', null, 'dc-ptop');
+            let label = 'Waiting for the worker to pick it up…';
+            if (steps.length) {
+                const current = steps.find(s => s.status === 'running' || s.status === 'retrying')
+                    || steps.find(s => s.status === 'pending' || s.status === 'not_run');
+                const m = batches(current);
+                const name = !current ? 'Finishing'
+                    : (/embed/.test(current.name) && m ? `Embed batches ${m[1]}/${m[2]}` : (STEP_LABELS[current.name] || current.name));
+                label = `${name} · ${steps.filter(s => s.status === 'done').length}/${steps.length} steps`
+                    + (run.total_seconds != null ? ` · ${fmtSeconds(run.total_seconds)}` : '');
+            }
+            top.appendChild(runEl('span', label, 'dc-plabel'));
+            if (stopButton) top.appendChild(stopButton);
+            const segs = runEl('div', null, 'dc-segs');
+            (steps.length ? steps : [{ status: 'pending' }]).forEach(step => {
+                const seg = runEl('div', null, 'dc-seg' + (step.status === 'done' ? ' done'
+                    : (step.status === 'failed' ? ' bad' : (step.status === 'running' || step.status === 'retrying' ? ' run' : ''))));
+                if (seg.classList.contains('run')) {
+                    const m = batches(step);
+                    const fill = document.createElement('i');
+                    fill.style.width = `${m && Number(m[2]) ? Math.round(100 * m[1] / m[2]) : 0}%`;
+                    seg.appendChild(fill);
+                }
+                segs.appendChild(seg);
+            });
+            wrap.append(top, segs);
+            return wrap;
+        }
+
+        // ---- 'process' (temporary Temporal run, nothing saved): the same task card, live ----
+        const PROCESS_RUN_URL = "{% url 'chat:process-run-status' 'WORKFLOW' %}";
+
+        function extractProcessRun(text) {
+            const match = text.match(/```processrun\n([\s\S]*?)```/);
+            if (!match) return { text, run: null };
+            try {
+                return { text: text.slice(0, match.index) + text.slice(match.index + match[0].length), run: JSON.parse(match[1]) };
+            } catch (e) {
+                return { text, run: null };
+            }
+        }
+
+        function buildProcessCard(spec) {
+            const card = document.createElement('div');
+            card.className = 'docs-card';
+            const bodyEl = document.createElement('div');
+            const urlFor = kind => PROCESS_RUN_URL.replace('run-status', kind).replace('WORKFLOW', spec.id);
+            const statusUrl = urlFor('run-status');
+            let data = null, showDetails = false, note = '', timer = null, summaryDone = false;
+
+            function state() {
+                const status = data && data.run && data.run.status;
+                if (!status || status === 'Running') return { label: 'Running', color: RUN_COLORS.running, final: false };
+                if (status === 'Completed') return { label: 'Done', color: RUN_COLORS.done, final: true };
+                if (status === 'Canceled' || status === 'Terminated') return { label: 'Stopped', color: RUN_COLORS.retrying, final: true };
+                return { label: 'Failed', color: RUN_COLORS.failed, final: true };
+            }
+
+            function stopButton() {
+                const button = runEl('button', 'Stop', 'dc-btn stop');
+                button.type = 'button';
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(urlFor('stop'), { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                        note = response.ok ? '' : ((await response.json()).message || 'Could not stop it.');
+                    } catch (e) { note = 'Could not reach the server.'; }
+                    load();
+                });
+                return button;
+            }
+
+            function restartButton() {
+                const button = runEl('button', 'Restart', 'dc-btn start');
+                button.type = 'button';
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(urlFor('restart'), { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                        const result = await response.json();
+                        if (response.ok) { addMessage(result.content, 'bot'); return; }  // the new run gets its own card
+                        note = result.message || 'Could not restart it.';
+                    } catch (e) { note = 'Could not reach the server.'; }
+                    render();
+                });
+                return button;
+            }
+
+            function render() {
+                bodyEl.replaceChildren();
+                const run = data && data.run;
+                const st = state();
+                const steps = run ? run.steps.filter(s => s.name !== 'notify_document') : [];
+                const table = document.createElement('table');
+                const head = document.createElement('tr');
+                ['Task', 'Status', 'Finished', 'Action'].forEach(h => head.appendChild(runEl('th', h)));
+                table.appendChild(head);
+                const tr = document.createElement('tr');
+                const task = runEl('div', null, 'dc-task');
+                const info = document.createElement('div');
+                const nameLine = runEl('div', spec.name, 'dc-name');
+                nameLine.appendChild(runEl('span', 'Temporal · not saved', 'dc-tag'));
+                const more = runEl('button', showDetails ? 'Hide details' : 'Details', 'dc-more');
+                more.type = 'button';
+                more.addEventListener('click', () => { showDetails = !showDetails; render(); });
+                const chunks = run && run.chunk_count ? `${run.chunk_count} chunks` : 'temporary run';
+                info.append(nameLine, runEl('div', `Workflow ${spec.id.slice(0, 20)}… · ${chunks}`, 'dc-sub'), more);
+                task.append(runEl('span', 'PDF', 'dc-file'), info);
+                const pill = runEl('span', st.label, 'dc-pill');
+                pill.style.color = st.color;
+                pill.style.borderColor = st.color + '55';
+                pill.style.background = st.color + '14';
+                const finished = st.final && run && run.closed ? docTimeAgo(run.closed.replace(' ', 'T') + 'Z') : '—';
+                // Running: the Stop button is in the progress row below. Stopped or failed: offer a re-run here.
+                const action = (!st.final && data && data.can_stop) ? ''
+                    : (st.label === 'Stopped' || st.label === 'Failed') ? restartButton() : '—';
+                [task, pill, runEl('span', finished, 'dc-when'), action].forEach(cell => {
+                    const td = document.createElement('td');
+                    if (cell instanceof Node) td.appendChild(cell); else td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+                if (!st.final) {
+                    const prow = document.createElement('tr');
+                    prow.className = 'dc-progress';
+                    const td = document.createElement('td');
+                    td.colSpan = 4;
+                    td.appendChild(buildProgress(run, data && data.can_stop ? stopButton() : null));
+                    if (note) td.appendChild(runEl('div', note, 'dc-err'));
+                    prow.appendChild(td);
+                    table.appendChild(prow);
+                }
+                if (showDetails) {
+                    const drow = document.createElement('tr');
+                    drow.className = 'dc-detail';
+                    const td = document.createElement('td');
+                    td.colSpan = 4;
+                    if (!run) td.textContent = 'Loading…';
+                    else {
+                        td.appendChild(runTable(['Chunks made', 'Steps done', 'Total time', 'Run status'],
+                            [[String(run.chunk_count || 0), `${steps.filter(s => s.status === 'done').length}/${steps.length}`, fmtSeconds(run.total_seconds), run.status]]));
+                        td.appendChild(runTable(['Step', 'Status', 'Detail', 'Time'], steps.map(step => [
+                            STEP_LABELS[step.name] || step.name,
+                            statusPill(step.status.replace('_', ' '), RUN_COLORS[step.status] || '#6b7280'),
+                            step.summary || (step.attempt > 1 ? `attempt ${step.attempt}` : ''),
+                            { text: fmtSeconds(step.duration) + (step.error ? ` — ${step.error}` : ''), err: !!step.error },
+                        ])));
+                    }
+                    drow.appendChild(td);
+                    table.appendChild(drow);
+                }
+                bodyEl.appendChild(table);
+                if (st.final && note) bodyEl.appendChild(runEl('div', note, 'dc-err'));
+            }
+
+            async function postSummary() {
+                if (summaryDone) return;
+                summaryDone = true;
+                try {
+                    const response = await fetch(urlFor('summary'), { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+                    const result = await response.json();
+                    if (response.ok && !result.existing) addMessage(result.content, 'bot');
+                } catch (e) { /* the card already shows the outcome */ }
+            }
+
+            async function load() {
+                clearTimeout(timer);
+                try {
+                    const response = await fetch(statusUrl);
+                    if (response.ok) data = await response.json();
+                } catch (e) { /* Temporal is briefly unavailable: keep what is shown and retry */ }
+                render();
+                if (!document.body.contains(card)) return;
+                if (data && state().final) {
+                    if (state().label === 'Done') postSummary();
+                    return;
+                }
+                timer = setTimeout(load, 1500);
+            }
+
+            card.appendChild(bodyEl);
+            bodyEl.appendChild(runEl('div', 'Starting…', 'dc-empty'));
+            load();
+            return card;
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            const file = fileInput.files[0];
+            if (!text && !file) return;
+            input.value = '';
+            clearAttachedFile();
+            updateSendState();
+
+            if (file) {
+                await sendWithFile(text, file);
+                return;
+            }
+
+            await ensureSession();
+            nameIfUntitled(text);
+            addMessage(text, 'user');
+            showTyping();
+            socket.send(JSON.stringify({ message: text }));
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        async function loadConversation(id, agentType) {
+            sessionId = id;
+            messagesDiv.innerHTML = '';
+            setActive(id);
+            if (agentType) {
+                agentSelect.value = agentType;
+            }
+            agentSelect.disabled = true;
+            history.pushState(null, '', `/chat/${agentSelect.value}/`);
+            const response = await fetch(`/chat/${id}/messages/`);
+            const data = await response.json();
+            data.messages.forEach(m => addMessage(m.content, m.sender, m.file_name, m.file_url));
+            connectSocket(id);
+        }
+
+        function startNewChat() {
+            sessionId = null;
+            if (socket) { socket.close(); socket = null; }
+            showEmptyState();
+            setActive('');
+            agentSelect.selectedIndex = 0;
+            agentSelect.disabled = false;
+            history.pushState(null, '', `/chat/${agentSelect.value}/`);
+        }
+
+        function setActive(id) {
+            document.querySelectorAll('#sidebar .conversation-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.sessionId === String(id));
+            });
+        }
+
+        function updateSendState() { sendBtn.disabled = !input.value.trim() && !fileInput.files[0]; }
+        input.addEventListener('input', updateSendState);
+        fileInput.addEventListener('change', updateSendState);
+        updateSendState();
+        showEmptyState();
+
+        document.getElementById('new-chat-item').addEventListener('click', startNewChat);
+        const agentUrl = () => `/chat/${agentSelect.value}/`;
+        agentSelect.addEventListener('change', () => history.pushState(null, '', agentUrl()));
+
+        document.querySelectorAll('.conversation-item[data-agent-type]').forEach(item => {
+            item.addEventListener('click', () => loadConversation(item.dataset.sessionId, item.dataset.agentType));
+        });
+
+        const docNotifContainer = document.getElementById('doc-notifications');
+        let lastDocNotifId = null;
+        let docNotifInitialized = false;
+
+        function showDocBanner(text) {
+            const banner = document.createElement('div');
+            banner.className = 'doc-notif-banner';
+            const span = document.createElement('span');
+            span.textContent = text;
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'doc-notif-close';
+            closeBtn.textContent = '×';
+            closeBtn.addEventListener('click', () => banner.remove());
+            banner.appendChild(span);
+            banner.appendChild(closeBtn);
+            docNotifContainer.appendChild(banner);
+            setTimeout(() => banner.remove(), 3000);
+        }
+
+        async function pollDocNotifications() {
+            try {
+                const since = lastDocNotifId || 0;
+                const response = await fetch(`/chat/api/document-notifications/?since=${since}`);
+                const data = await response.json();
+                if (docNotifInitialized) {
+                    data.messages.forEach(m => showDocBanner(m.content));
+                } else {
+                    docNotifInitialized = true;
+                }
+                lastDocNotifId = data.latest_id;
+            } catch (e) {
+                // ignore transient network errors
+            }
+        }
+
+        pollDocNotifications();
+        setInterval(pollDocNotifications, 10000);
+    </script>
+{% endblock %}
